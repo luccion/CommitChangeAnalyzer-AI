@@ -1,6 +1,6 @@
 # CommitChangeAnalyzer-AI
 
-一个基于 Python 的提交分析工具，用于对目标时间附近的两个最近提交做直接对比，重点处理 Excel 等二进制文件的变更。
+一个基于 Python 的提交分析工具，用于直接对比目标时间附近的两个最近提交，重点处理 Excel 等二进制文件的变更。
 
 1. 采集目标 period 起点和终点附近最接近边界的两个提交，并直接比较它们的文件变更。
 2. 还原变更前后版本，支持 CSV、JSON、文本以及 `.xlsx/.xlsm` Excel 文件。
@@ -90,6 +90,14 @@ python analyze_commits.py --since 2026-05-01 --until 2026-05-16 --mode api
 4. 上传 `output/` 目录为 artifact。
 5. 在 PR 中创建或更新一条固定评论，集中展示 AI 分析结果。
 
+另外已内置 [release.yml](.github/workflows/release.yml)，用于发布版本：
+
+- `push tag (v*)`：自动导出 `analyze_commits_single.py` 并创建 GitHub Release。
+- `workflow_dispatch`：手动指定 tag 发布。
+
+使用 release workflow 前请推送类似 `v0.1.1` 的 tag，或手动触发并填写 `tag`。
+release 附件只会包含 `analyze_commits_single.py`，便于直接下载后粘贴到目标仓库使用。
+
 ## 输出内容
 
 工具默认生成以下产物：
@@ -109,3 +117,6 @@ python analyze_commits.py --since 2026-05-01 --until 2026-05-16 --mode api
 当 `--mode api` 成功时，`analysis-report.md` 和 `analysis-report.json` 也会并入远程 AI 的最终分析结果，便于集中查看。
 
 其中 `analysis-report.md` 只保留一句话级别的客观摘要和最少元信息；风险和 TODO 主要交给 `ai-prompt.md` 对应的 AI 分析流程生成。
+
+## 注意事项
+在使用mode api时，谨慎划定评估时间范围和文件范围，过大的范围可能导致你的Token焚烧殆尽。
