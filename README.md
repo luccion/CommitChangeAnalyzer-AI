@@ -1,76 +1,48 @@
 # CommitChangeAnalyzer-AI
 
-一个基于 Python 的提交分析工具，用于分析某个时间段内的提交记录，重点处理 Excel 等二进制文件的变更。
+一个基于 Python 的提交分析工具，用于对目标时间附近的两个最近提交做直接对比，重点处理 Excel 等二进制文件的变更。
 
-当前仓库已提供一个可运行的 MVP，覆盖以下主流程：
-
-1. 采集指定提交范围内的提交和文件变更。
+1. 采集目标 period 起点和终点附近最接近边界的两个提交，并直接比较它们的文件变更。
 2. 还原变更前后版本，支持 CSV、JSON、文本以及 `.xlsx/.xlsm` Excel 文件。
 3. 将 Excel 规范化为稳定 CSV 制品。
 4. 生成结构化 diff、风险项和 TODO 列表。
-5. 输出 Markdown 报告和 JSON 结果文件。
+5. 输出 Markdown 报告、结构化 diff 上下文和 AI prompt 文件。（或者你可以直接使用根目录下的 `.prompt.md`）
 
-## 快速开始（Windows）
+## 环境
+- Python 3.10+
+- Git 命令行工具（确保 `git` 命令可用）
+- 对于 Excel 文件的分析，需要安装 `openpyxl` 和 `pandas`：
 
-最短路径（无需安装）：
 
+## 快速开始（Windows） 
+1. 将本仓库完整地粘贴到你的项目中
+2. 进入项目（分析目标）目录
+3. 运行分析脚本：
 ```bash
-python analyze_commits.py
+python path/to/analyze_commits.py
 ```
 
-默认会分析当前仓库最新一次提交，并把结果输出到 `output\`。
-
-也可以双击或命令行运行：
-
-```bash
-run_analyzer.bat
-```
-
-如果你需要分析 Excel 文件，再安装额外依赖（推荐）：
-
-```bash
-python -m pip install openpyxl
-```
-
-或使用项目可选依赖：
-
-```bash
-python -m pip install ".[excel]"
-```
-
-如果你只是分析 CSV / JSON / 文本变更，则不需要先安装任何项目依赖。
-
-## 使用方式
-
-默认分析当前仓库最新一次提交：
-
-```bash
-python analyze_commits.py
-```
-
-按提交范围分析：
-
-```bash
-python analyze_commits.py --base main --head HEAD
-```
-
-按时间范围分析：
-
-```bash
-python analyze_commits.py --since 2026-05-01 --until 2026-05-16
-```
-
-指定输出目录：
-
-```bash
-python analyze_commits.py --output-dir .\output
-```
+默认会分析所选范围的起点和终点提交，并把结果输出到 `output\`。
 
 如果你更喜欢安装后再运行，也可以：
 
 ```bash
 python -m pip install -e .
 python -m commit_change_analyzer
+```
+
+## 参数
+
+- `--base`：分析范围的起点提交（默认为 Git 仓库当前 HEAD 的父提交）。
+- `--head`：分析范围的终点提交（默认为 Git 仓库当前 HEAD）。
+- `--since`：分析范围的起点时间（格式为 YYYY-MM-DD）。
+- `--until`：分析范围的终点时间（格式为 YYYY-MM-DD）。
+- `--path`：只分析特定目录或文件的变更。
+- `--output-dir`：指定输出目录（默认为当前目录下的 `output\`）。
+
+
+```bash
+python analyze_commits.py --since 2026-05-01 --until 2026-05-16 --path assets/excel --output-dir .\output
 ```
 
 ## 输出内容
@@ -80,10 +52,11 @@ python -m commit_change_analyzer
 - `analysis-report.md`：给人阅读的分析报告。
 - `analysis-report.json`：给程序消费的完整结构化结果。
 - `todo-list.json`：标准化 TODO 列表。
-- `artifacts/`：Excel 规范化后的 CSV 制品。
+- `diff-context.md`：客观的结构化 diff 上下文，适合交给 AI 分析。
+- `diff-context.json`：与 diff-context.md 对应的结构化 JSON。
+- `ai-prompt.md`：配套的 AI 分析提示词。
+- `artifacts/`：仅保留这两个提交对比所需的 Excel 规范化 CSV 制品。
 
-## 当前 MVP 范围
+当指定 `--path` 时，上述产物只会覆盖该路径下的变更内容。
 
-- 已支持：提交采集、Excel 转 CSV、结构化 diff、规则分析、TODO 输出。
-- 默认只建议使用规则分析；`agent/api` 仍保留兼容入口，但当前会退化为规则分析。
-- 暂未支持：`.xls`、`.xlsb` 的结构化解析；这些文件会在报告中提示人工转换为 `.xlsx` 后重试。
+其中 `analysis-report.md` 只保留一句话级别的客观摘要和最少元信息；风险和 TODO 主要交给 `ai-prompt.md` 对应的 AI 分析流程生成。

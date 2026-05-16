@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from commit_change_analyzer.orchestrator import AnalyzerConfig, run_analysis
+from orchestrator import AnalyzerConfig, run_analysis
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -17,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--until", help="Git --until expression, such as '2026-05-16'.")
     parser.add_argument("--base", help="Base commit or branch for range analysis.")
     parser.add_argument("--head", default="HEAD", help="Head commit or branch for range analysis.")
+    parser.add_argument(
+        "--path",
+        dest="target_path",
+        help="Repository subdirectory or file path to include in the analysis.",
+    )
     parser.add_argument(
         "--mode",
         choices=["rule", "agent", "api"],
@@ -36,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
         until=args.until,
         base=args.base,
         head=args.head,
+        target_path=Path(args.target_path) if args.target_path else None,
         mode=args.mode,
     )
     outputs = run_analysis(config)

@@ -10,7 +10,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from commit_change_analyzer.cli import main
+from cli import main
 
 
 if __name__ == "__main__":

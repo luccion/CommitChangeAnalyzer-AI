@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from zipfile import BadZipFile
 
-from commit_change_analyzer.models import NormalizedRow, NormalizedTable
+from models import NormalizedRow, NormalizedTable
 
 KEY_CANDIDATES = ("id", "key", "code", "name")
 

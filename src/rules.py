@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from commit_change_analyzer.models import RiskItem, StructuredDiff, TodoItem
+from models import RiskItem, StructuredDiff, TodoItem
 
 ID_HINTS = ("id", "key", "code")
 BALANCE_HINTS = ("hp", "attack", "damage", "drop", "reward", "rate", "ratio", "cost", "price", "exp", "score")
@@ -32,6 +32,12 @@ def _priority_for_severity(severity: str) -> str:
     }[severity]
 
 
+def _transition(before_value: str, after_value: str) -> str:
+    before_text = before_value or "空"
+    after_text = after_value or "空"
+    return f"从 {before_text} 变为 {after_text}"
+
+
 def analyze_diffs(file_path: str, diffs: list[StructuredDiff], warnings: list[str]) -> tuple[list[str], list[RiskItem], list[TodoItem]]:
     key_changes: list[str] = []
     buckets: dict[str, dict[str, object]] = defaultdict(lambda: {"severity": "low", "count": 0, "evidence": []})
@@ -49,32 +55,49 @@ def analyze_diffs(file_path: str, diffs: list[StructuredDiff], warnings: list[st
         evidence = f"{file_path}::{diff.table} row={diff.row_key} column={diff.column} type={diff.change_type}"
         if diff.change_type in {"table_added", "table_removed"}:
             add_bucket("schema-change", "high", evidence)
-            key_changes.append(f"{file_path} 的表 {diff.table} 发生了整体结构变化。")
+            if diff.change_type == "table_added":
+                key_changes.append(f"{file_path} 的表 {diff.table} 从不存在变为存在。")
+            else:
+                key_changes.append(f"{file_path} 的表 {diff.table} 从存在变为不存在。")
             continue
         if diff.change_type in {"column_added", "column_removed"}:
             add_bucket("schema-change", "high", evidence)
-            key_changes.append(f"{file_path} 的表 {diff.table} 字段 {diff.column} 发生变化。")
+            if diff.change_type == "column_added":
+                key_changes.append(f"{file_path} 的表 {diff.table} 字段 {diff.column} 从不存在变为存在。")
+            else:
+                key_changes.append(f"{file_path} 的表 {diff.table} 字段 {diff.column} 从存在变为不存在。")
             continue
         if diff.change_type == "row_deleted":
             add_bucket("row-deletion", "high", evidence)
-            key_changes.append(f"{file_path} 的表 {diff.table} 删除了行 {diff.row_key}。")
+            key_changes.append(f"{file_path} 的表 {diff.table} 中的行 {diff.row_key} 从存在变为不存在。")
             continue
         if diff.change_type == "row_added":
             add_bucket("row-addition", "low", evidence)
+            key_changes.append(f"{file_path} 的表 {diff.table} 中新增了行 {diff.row_key}。")
             continue
         if _contains_hint(diff.column, ID_HINTS):
             add_bucket("identifier-change", "critical", evidence)
-            key_changes.append(f"{file_path} 的标识字段 {diff.column} 在行 {diff.row_key} 被修改。")
+            key_changes.append(
+                f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的标识字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
+            )
             continue
         if diff.before_value and not diff.after_value:
             add_bucket("value-cleared", "medium", evidence)
+            key_changes.append(
+                f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的字段 {diff.column} 从 {diff.before_value} 变为空。"
+            )
             continue
         if _contains_hint(diff.column, BALANCE_HINTS) and _is_number(diff.before_value) and _is_number(diff.after_value):
             add_bucket("balance-change", "high", evidence)
-            key_changes.append(f"{file_path} 的数值字段 {diff.column} 在行 {diff.row_key} 发生变化。")
+            key_changes.append(
+                f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的数值字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
+            )
             continue
         if _is_number(diff.before_value) and _is_number(diff.after_value):
             add_bucket("numeric-change", "medium", evidence)
+            key_changes.append(
+                f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
+            )
 
     for warning in warnings:
         add_bucket("unsupported-file", "medium", warning)

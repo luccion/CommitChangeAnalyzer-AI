@@ -25,6 +25,14 @@ class CommitEvent:
 
 
 @dataclass(slots=True)
+class CommitComparison:
+    before: CommitEvent
+    after: CommitEvent
+    changed_files: list[FileChange]
+    description: str
+
+
+@dataclass(slots=True)
 class NormalizedRow:
     row_key: str
     values: dict[str, str]

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from commit_change_analyzer.models import NormalizedTable, StructuredDiff
+from models import NormalizedTable, StructuredDiff
 
 
 def _row_map(table: NormalizedTable) -> dict[str, dict[str, str]]:
