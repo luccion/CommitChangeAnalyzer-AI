@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 import json
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from models import AnalysisReport
 
@@ -12,7 +12,7 @@ def _markdown_escape(value: str) -> str:
     return value.replace("\n", "<br>").replace("|", "\\|")
 
 
-def _build_diff_context(report: AnalysisReport, range_description: str) -> dict[str, object]:
+def build_diff_context(report: AnalysisReport, range_description: str) -> dict[str, object]:
     commits = report.commits[:2]
     before_commit = commits[0] if len(commits) > 0 else None
     after_commit = commits[1] if len(commits) > 1 else None
@@ -53,8 +53,8 @@ def _build_diff_context(report: AnalysisReport, range_description: str) -> dict[
     }
 
 
-def _build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
-    context = _build_diff_context(report, range_description)
+def build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
+    context = build_diff_context(report, range_description)
     comparison = cast(dict[str, object], context["comparison"])
     before_commit = cast(dict[str, object] | None, comparison.get("before"))
     after_commit = cast(dict[str, object] | None, comparison.get("after"))
@@ -137,14 +137,20 @@ def _build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
     return "\n".join(sections).rstrip() + "\n"
 
 
-def _build_prompt_text(range_description: str) -> str:
-    prompt_source = Path(__file__).resolve().parents[2] / ".prompt.md"
+def build_prompt_text(range_description: str) -> str:
+    prompt_source = Path(__file__).resolve().parents[1] / ".prompt.md"
     if prompt_source.exists():
         return prompt_source.read_text(encoding="utf-8")
     return f"# AI 分析提示\n\n请基于 {range_description} 的客观 diff 上下文进行语义分析。\n"
 
 
-def write_report(report: AnalysisReport, output_dir: Path, range_description: str, mode: str) -> dict[str, str]:
+def write_report(
+    report: AnalysisReport,
+    output_dir: Path,
+    range_description: str,
+    mode: str,
+    ai_result: dict[str, Any] | None = None,
+) -> dict[str, str]:
     output_dir.mkdir(parents=True, exist_ok=True)
     markdown_path = output_dir / "analysis-report.md"
     json_path = output_dir / "analysis-report.json"
@@ -152,6 +158,21 @@ def write_report(report: AnalysisReport, output_dir: Path, range_description: st
     diff_markdown_path = output_dir / "diff-context.md"
     diff_json_path = output_dir / "diff-context.json"
     prompt_path = output_dir / "ai-prompt.md"
+
+    ai_artifact_line = ""
+    ai_section = ""
+    if ai_result is not None:
+        ai_model = str(ai_result.get("model", "-"))
+        ai_content = str(ai_result.get("content", "")).strip()
+        ai_artifact_line = "\nAI 最终产物：ai-analysis.md、ai-analysis.json"
+        ai_section = f"""
+
+## AI 分析结果
+
+模型：`{ai_model}`
+
+{ai_content or 'AI 已执行，但未返回可展示内容。'}
+"""
 
     markdown = f"""# 提交变更分析报告
 
@@ -161,17 +182,20 @@ def write_report(report: AnalysisReport, output_dir: Path, range_description: st
 运行模式：`{mode}`
 指标：commits={report.metrics.get('commit_count', 0)}, changed_files={report.metrics.get('changed_file_count', 0)}, analyzed_files={report.metrics.get('analyzed_file_count', 0)}, diffs={report.metrics.get('diff_count', 0)}
 
-AI 中间产物：{diff_markdown_path.name}、{diff_json_path.name}、{prompt_path.name}
+AI 中间产物：{diff_markdown_path.name}、{diff_json_path.name}、{prompt_path.name}{ai_artifact_line}{ai_section}
 """
     markdown_path.write_text(markdown, encoding="utf-8")
-    json_path.write_text(json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    json_payload = report.to_dict()
+    if ai_result is not None:
+        json_payload["ai_analysis"] = ai_result
+    json_path.write_text(json.dumps(json_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     todo_path.write_text(
         json.dumps([asdict(todo) for todo in report.todos], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    diff_markdown_path.write_text(_build_diff_markdown(report, range_description), encoding="utf-8")
-    diff_json_path.write_text(json.dumps(_build_diff_context(report, range_description), ensure_ascii=False, indent=2), encoding="utf-8")
-    prompt_path.write_text(_build_prompt_text(range_description), encoding="utf-8")
+    diff_markdown_path.write_text(build_diff_markdown(report, range_description), encoding="utf-8")
+    diff_json_path.write_text(json.dumps(build_diff_context(report, range_description), ensure_ascii=False, indent=2), encoding="utf-8")
+    prompt_path.write_text(build_prompt_text(range_description), encoding="utf-8")
     return {
         "markdown": str(markdown_path),
         "json": str(json_path),

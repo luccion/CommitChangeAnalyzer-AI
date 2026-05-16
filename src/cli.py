@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         choices=["rule", "agent", "api"],
         default="rule",
-        help=argparse.SUPPRESS,
+        help="Analysis mode: rule for local-only output, api for remote AI analysis after local diff generation.",
     )
     return parser
 

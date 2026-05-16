@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
+from ai_client import load_api_config, run_remote_analysis
 from diffing import diff_tables
 from git_ops import collect_commit_comparison, read_blob
 from models import AnalysisReport, FileAnalysis
 from normalize import load_tables, write_normalized_tables
-from reporting import write_report
+from reporting import build_diff_context, build_diff_markdown, build_prompt_text, write_report
 from rules import analyze_diffs
 
 
@@ -40,7 +42,7 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
     todos = []
     changed_file_count = len(comparison.changed_files)
 
-    if config.mode != "rule":
+    if config.mode not in {"rule", "api"}:
         warnings.append(f"Mode '{config.mode}' is not implemented yet; falling back to rule-only analysis.")
 
     artifact_root = config.output_dir / "artifacts"
@@ -99,7 +101,35 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
     range_description = comparison.description
     if config.target_path is not None:
         range_description = f"{comparison.description} / path={config.target_path.as_posix()}"
-    return write_report(report, config.output_dir, range_description, config.mode)
+    outputs = write_report(report, config.output_dir, range_description, config.mode)
+
+    if config.mode == "api":
+        try:
+            api_config = load_api_config(config.repo)
+            prompt_text = build_prompt_text(range_description)
+            diff_markdown = build_diff_markdown(report, range_description)
+            diff_json_text = json.dumps(build_diff_context(report, range_description), ensure_ascii=False, indent=2)
+            remote_result = run_remote_analysis(
+                api_config,
+                prompt_text=prompt_text,
+                diff_markdown=diff_markdown,
+                diff_json_text=diff_json_text,
+                summary_text=report.summary,
+            )
+            ai_markdown_path = config.output_dir / "ai-analysis.md"
+            ai_json_path = config.output_dir / "ai-analysis.json"
+            ai_markdown_path.write_text(str(remote_result["content"]), encoding="utf-8")
+            ai_json_path.write_text(json.dumps(remote_result, ensure_ascii=False, indent=2), encoding="utf-8")
+            outputs = write_report(report, config.output_dir, range_description, config.mode, ai_result=remote_result)
+            outputs["ai_markdown"] = str(ai_markdown_path)
+            outputs["ai_json"] = str(ai_json_path)
+        except RuntimeError as error:
+            warning_text = f"API analysis skipped: {error}"
+            warnings.append(warning_text)
+            report.warnings = dedupe(warnings)
+            outputs = write_report(report, config.output_dir, range_description, config.mode)
+
+    return outputs
 
 
 def dedupe(values: list[str]) -> list[str]:
