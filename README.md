@@ -28,14 +28,24 @@
 
 
 ## 快速开始（Windows） 
-1. 将本仓库完整地粘贴到你的项目中
+
+1. 将`analyze_commits_single.py`粘贴到你的项目中
 2. 进入项目（分析目标）目录
 3. 运行分析脚本：
 ```bash
-python path/to/analyze_commits.py
+python analyze_commits_single.py
+```
+默认会分析所选范围的起点和终点提交，并把结果输出到 `output\`。
+
+## 使用
+1. 你可以将本仓库完整地粘贴到你的项目中，然后执行 `analyze_commits.py` 来运行分析。脚本会自动采集目标时间范围内的两个边界提交，并生成分析结果。
+2. 如果你想在本地生成分析脚本，可以先克隆这个仓库，然后运行：
+
+```bash
+python tools/export_single_file.py --output analyze_commits_single.py
 ```
 
-默认会分析所选范围的起点和终点提交，并把结果输出到 `output\`。
+然后把 `analyze_commits_single.py` 复制到目标仓库即可运行（`.prompt.md` 会在导出时自动内嵌）。
 
 如果你更喜欢安装后再运行，也可以：
 

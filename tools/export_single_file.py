@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+import argparse
+import ast
+from collections import defaultdict, deque
+import json
+from pathlib import Path
+
+
+def _module_name(path: Path) -> str:
+    return path.stem
+
+
+def _local_modules(src_dir: Path) -> dict[str, Path]:
+    modules: dict[str, Path] = {}
+    for path in sorted(src_dir.glob("*.py")):
+        name = _module_name(path)
+        if name in {"__init__", "__main__"}:
+            continue
+        modules[name] = path
+    return modules
+
+
+def _imported_local_modules(tree: ast.AST, local_module_names: set[str]) -> set[str]:
+    deps: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".", 1)[0]
+                if root in local_module_names:
+                    deps.add(root)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level and node.level > 0:
+                continue
+            if not node.module:
+                continue
+            root = node.module.split(".", 1)[0]
+            if root in local_module_names:
+                deps.add(root)
+    return deps
+
+
+def _lines_to_remove(tree: ast.Module, local_module_names: set[str]) -> set[int]:
+    to_remove: set[int] = set()
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom):
+            if node.module == "__future__":
+                start = node.lineno
+                end = getattr(node, "end_lineno", node.lineno)
+                to_remove.update(range(start, end + 1))
+                continue
+            if node.level == 0 and node.module:
+                root = node.module.split(".", 1)[0]
+                if root in local_module_names:
+                    start = node.lineno
+                    end = getattr(node, "end_lineno", node.lineno)
+                    to_remove.update(range(start, end + 1))
+        elif isinstance(node, ast.Import):
+            imported_roots = {alias.name.split(".", 1)[0] for alias in node.names}
+            if imported_roots and imported_roots.issubset(local_module_names):
+                start = node.lineno
+                end = getattr(node, "end_lineno", node.lineno)
+                to_remove.update(range(start, end + 1))
+    return to_remove
+
+
+def _strip_local_imports(source: str, tree: ast.Module, local_module_names: set[str]) -> str:
+    lines = source.splitlines()
+    to_remove = _lines_to_remove(tree, local_module_names)
+    kept: list[str] = []
+    for index, line in enumerate(lines, start=1):
+        if index in to_remove:
+            continue
+        kept.append(line)
+    return "\n".join(kept).rstrip() + "\n"
+
+
+def _topological_modules(modules: dict[str, Path]) -> list[str]:
+    names = set(modules.keys())
+    dependencies: dict[str, set[str]] = {}
+    reverse_edges: dict[str, set[str]] = defaultdict(set)
+    indegree: dict[str, int] = {}
+
+    for name, path in modules.items():
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        deps = _imported_local_modules(tree, names) - {name}
+        dependencies[name] = deps
+        indegree[name] = len(deps)
+        for dep in deps:
+            reverse_edges[dep].add(name)
+
+    queue = deque(sorted(name for name, degree in indegree.items() if degree == 0))
+    ordered: list[str] = []
+    while queue:
+        current = queue.popleft()
+        ordered.append(current)
+        for neighbor in sorted(reverse_edges[current]):
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if len(ordered) != len(modules):
+        unresolved = sorted(set(modules) - set(ordered))
+        raise RuntimeError(f"Cannot resolve local module order due to cyclic dependencies: {unresolved}")
+    return ordered
+
+
+def _rewrite_reporting_prompt(body: str, prompt_text: str) -> str:
+    signature = "def build_prompt_text(range_description: str) -> str:\n"
+    next_block = "\ndef write_report("
+    if signature not in body or next_block not in body:
+        return body
+
+    before, remainder = body.split(signature, 1)
+    original_block, after = remainder.split(next_block, 1)
+    _ = original_block
+
+    embedded_block = (
+        "def build_prompt_text(range_description: str) -> str:\n"
+        "    _ = range_description\n"
+        f"    return {json.dumps(prompt_text, ensure_ascii=False)}\n"
+    )
+    return f"{before}{embedded_block}{next_block}{after}"
+
+
+def export_single_file(repo_root: Path, output_file: Path) -> None:
+    src_dir = repo_root / "src"
+    modules = _local_modules(src_dir)
+    if not modules:
+        raise RuntimeError(f"No modules found under {src_dir}")
+
+    module_order = _topological_modules(modules)
+    local_names = set(modules.keys())
+    prompt_path = repo_root / ".prompt.md"
+    prompt_text = prompt_path.read_text(encoding="utf-8") if prompt_path.exists() else ""
+
+    sections: list[str] = [
+        "from __future__ import annotations",
+        "",
+        '"""Generated by tools/export_single_file.py. Do not edit this file directly."""',
+        "",
+    ]
+
+    for module_name in module_order:
+        module_path = modules[module_name]
+        source = module_path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        body = _strip_local_imports(source, tree, local_names)
+        if module_name == "reporting":
+            body = _rewrite_reporting_prompt(body, prompt_text)
+        sections.extend(
+            [
+                f"# --- module: {module_name} ---",
+                body.rstrip(),
+                "",
+            ]
+        )
+
+    sections.extend(
+        [
+            "def _generated_entrypoint() -> int:",
+            "    return main()",
+            "",
+            "",
+            "if __name__ == \"__main__\":",
+            "    raise SystemExit(_generated_entrypoint())",
+            "",
+        ]
+    )
+
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_file.write_text("\n".join(sections), encoding="utf-8")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Export src modules into one runnable single-file script.")
+    parser.add_argument("--repo", default=".", help="Repository root path.")
+    parser.add_argument(
+        "--output",
+        default="analyze_commits_single.py",
+        help="Path of generated single-file script.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    repo_root = Path(args.repo).resolve()
+    output_file = Path(args.output)
+    if not output_file.is_absolute():
+        output_file = repo_root / output_file
+    export_single_file(repo_root, output_file)
+    print(f"Generated: {output_file}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
