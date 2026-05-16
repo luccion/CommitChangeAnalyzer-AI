@@ -216,33 +216,11 @@ class StructuredDiff:
 
 
 @dataclass(slots=True)
-class RiskItem:
-    risk_type: str
-    severity: str
-    confidence: float
-    evidence: str
-    impact: str
-
-
-@dataclass(slots=True)
-class TodoItem:
-    title: str
-    priority: str
-    owner_hint: str
-    due_hint: str
-    action: str
-    verify_steps: str
-    evidence: str
-
-
-@dataclass(slots=True)
 class FileAnalysis:
     commit_id: str
     file_change: FileChange
     diffs: list[StructuredDiff] = field(default_factory=list)
     key_changes: list[str] = field(default_factory=list)
-    risks: list[RiskItem] = field(default_factory=list)
-    todos: list[TodoItem] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -250,8 +228,6 @@ class FileAnalysis:
 class AnalysisReport:
     summary: str
     key_changes: list[str]
-    risks: list[RiskItem]
-    todos: list[TodoItem]
     metrics: dict[str, Any]
     commits: list[CommitEvent]
     files: list[FileAnalysis]
@@ -838,8 +814,6 @@ def build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
         f"- changed_file_count: {report.metrics.get('changed_file_count', 0)}",
         f"- analyzed_file_count: {report.metrics.get('analyzed_file_count', 0)}",
         f"- diff_count: {report.metrics.get('diff_count', 0)}",
-        f"- risk_count: {report.metrics.get('risk_count', 0)}",
-        f"- todo_count: {report.metrics.get('todo_count', 0)}",
         "",
         "## 文件级差异",
         "",
@@ -897,7 +871,7 @@ def build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
 
 def build_prompt_text(range_description: str) -> str:
     _ = range_description
-    return "# CommitChangeAnalyzer AI Prompt\n\n你是一个提交变更分析助手。你的任务是基于输入的客观 diff 上下文，输出语义化、可执行的分析结论。\n\n## 输入\n\n你会收到以下材料：\n\n1. `diff-context.md`：人类可读的结构化差异上下文。\n2. `diff-context.json`：与上面一致的结构化 JSON。\n3. 必要时还会附上 `analysis-report.md` / `analysis-report.json` 作为补充。\n\n## 目标\n\n请把“事实”转成“意义”。重点回答：何种条目对应的哪些内容从 A 变成了 B。\n\n## 输出要求\n\n请严格按下面的结构输出，尽量简洁但不要失真：\n\n1. `summary`\n\n- 用 1 到 3 句话概括本次变化的核心结论。\n- 优先使用“从 A 变为 B”“新增了”“删除了”“清空了”这类表达。\n\n2. `key_changes`\n\n- 列出最重要的语义变化。\n- 每条都要尽量写成“对象 + 字段 + 变化前 + 变化后 + 影响方向”。\n\n3. `risks`\n\n- 只写可从 diff 直接推导出的风险，不要凭空扩展。\n- 每条风险都要附上对应证据或文件路径。\n\n4. `todos`\n\n- 一句话给出可执行的后续动作。\n\n5. `questions`\n\n- 如果有关键上下文缺失，列出需要人工确认的问题。\n- 没有问题就输出空列表。\n\n## 写作风格\n\n- 以事实为基础，不要使用空泛的“已修改”“发生变化”“进行了调整”之类表述。\n- 需要时直接说“<对象> 的 <字段> 从 A 变为 B”。\n- 不要把规则分析结果当成最终语义结论，必要时要主动解释其业务影响。\n- 不要编造未出现在 diff 里的背景知识。\n\n## 质量标准\n\n一条好的结论应该满足：\n\n- 能指出具体对象。\n- 能指出变化前后。\n- 能说明为什么这件事重要。\n- 能落到后续动作或验证方式。\n\n## 示例句式\n\n- “表 `RewardConfig` 中 `DropRate` 从 `0.1` 变为 `0.2`，会直接影响掉落概率。”\n- “行 `Item_1001` 从存在变为不存在，需要确认是否仍被活动脚本引用。”\n- “字段 `RoleId` 从 `A001` 变为 `A009`，会影响关联主键和跨表引用。”\n\n## 输出格式建议\n\n如果你需要结构化输出，建议使用 JSON 或分节 Markdown，并确保每条结论都能回溯到 diff 证据。\n"
+    return "# CommitChangeAnalyzer AI Prompt\n\n你是一个提交变更分析助手。你的任务是基于输入的客观 diff 上下文，输出语义化、可执行的分析结论。\n\n## 输入\n\n你会收到以下材料：\n\n1. `diff-context.md`：人类可读的结构化差异上下文。\n2. `diff-context.json`：与上面一致的结构化 JSON。\n3. 必要时还会附上 `analysis-report.md` / `analysis-report.json` 作为补充。\n\n## 目标\n\n请把“事实”转成“意义”。重点回答：何种条目对应的哪些内容从 A 变成了 B。\n\n## 输出要求\n\n请严格按下面的结构输出，尽量简洁但不要失真：\n\n1. `summary`\n\n- 用 1 到 3 句话概括本次变化的核心结论。\n- 优先使用“从 A 变为 B”“新增了”“删除了”“清空了”这类表达。\n\n2. `key_changes`\n\n- 列出最重要的语义变化。\n- 每条都要尽量写成“对象 + 字段 + 变化前 + 变化后 + 影响方向”。\n\n3. `questions`\n\n- 如果有关键上下文缺失，列出需要人工确认的问题。\n- 没有问题就输出空列表。\n\n## 写作风格\n\n- 以事实为基础，不要使用空泛的“已修改”“发生变化”“进行了调整”之类表述。\n- 需要时直接说“<对象> 的 <字段> 从 A 变为 B”。\n- 不要把规则分析结果当成最终语义结论，必要时要主动解释其业务影响。\n- 不要编造未出现在 diff 里的背景知识。\n\n## 质量标准\n\n一条好的结论应该满足：\n\n- 能指出具体对象。\n- 能指出变化前后。\n- 能说明为什么这件事重要。\n\n## 示例句式\n\n- “表 `RewardConfig` 中 `DropRate` 从 `0.1` 变为 `0.2`，会直接影响掉落概率。”\n- “行 `Item_1001` 从存在变为不存在，需要确认是否仍被活动脚本引用。”\n- “字段 `RoleId` 从 `A001` 变为 `A009`，会影响关联主键和跨表引用。”\n\n## 输出格式建议\n\n如果你需要结构化输出，建议使用 JSON 或分节 Markdown，并确保每条结论都能回溯到 diff 证据。\n"
 
 def write_report(
     report: AnalysisReport,
@@ -909,7 +883,6 @@ def write_report(
     output_dir.mkdir(parents=True, exist_ok=True)
     markdown_path = output_dir / "analysis-report.md"
     json_path = output_dir / "analysis-report.json"
-    todo_path = output_dir / "todo-list.json"
     diff_markdown_path = output_dir / "diff-context.md"
     diff_json_path = output_dir / "diff-context.json"
     prompt_path = output_dir / "ai-prompt.md"
@@ -944,17 +917,12 @@ AI 中间产物：{diff_markdown_path.name}、{diff_json_path.name}、{prompt_pa
     if ai_result is not None:
         json_payload["ai_analysis"] = ai_result
     json_path.write_text(json.dumps(json_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    todo_path.write_text(
-        json.dumps([asdict(todo) for todo in report.todos], ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
     diff_markdown_path.write_text(build_diff_markdown(report, range_description), encoding="utf-8")
     diff_json_path.write_text(json.dumps(build_diff_context(report, range_description), ensure_ascii=False, indent=2), encoding="utf-8")
     prompt_path.write_text(build_prompt_text(range_description), encoding="utf-8")
     return {
         "markdown": str(markdown_path),
         "json": str(json_path),
-        "todo_json": str(todo_path),
         "diff_markdown": str(diff_markdown_path),
         "diff_json": str(diff_json_path),
         "prompt": str(prompt_path),
@@ -962,11 +930,179 @@ AI 中间产物：{diff_markdown_path.name}、{diff_json_path.name}、{prompt_pa
 
 # --- module: rules ---
 
-from collections import defaultdict
+from dataclasses import dataclass
+import json
+from pathlib import Path
+from typing import Any
 
 
-ID_HINTS = ("id", "key", "code")
-BALANCE_HINTS = ("hp", "attack", "damage", "drop", "reward", "rate", "ratio", "cost", "price", "exp", "score")
+DEFAULT_ID_HINTS = ("id", "key", "code")
+DEFAULT_BALANCE_HINTS = ("hp", "attack", "damage", "drop", "reward", "rate", "ratio", "cost", "price", "exp", "score")
+DEFAULT_RULE_FILENAMES = ("commit-change-rules.json", ".commit-change-rules.json")
+
+
+@dataclass(slots=True)
+class RuleMatch:
+    change_types: tuple[str, ...] = ()
+    column_hints: tuple[str, ...] = ()
+    table_hints: tuple[str, ...] = ()
+    row_key_hints: tuple[str, ...] = ()
+    file_path_hints: tuple[str, ...] = ()
+    numeric_only: bool = False
+    before_empty: bool | None = None
+    after_empty: bool | None = None
+
+
+@dataclass(slots=True)
+class CustomRule:
+    name: str
+    matcher: RuleMatch
+    key_change_template: str
+
+
+@dataclass(slots=True)
+class RuleConfig:
+    identifier_hints: tuple[str, ...]
+    balance_hints: tuple[str, ...]
+    custom_rules: tuple[CustomRule, ...] = ()
+    source_path: Path | None = None
+
+
+def default_rule_config() -> RuleConfig:
+    return RuleConfig(
+        identifier_hints=DEFAULT_ID_HINTS,
+        balance_hints=DEFAULT_BALANCE_HINTS,
+    )
+
+
+def load_rule_config(repo_root: Path, config_path: Path | None = None) -> RuleConfig:
+    resolved_path = _resolve_rule_config_path(repo_root, config_path)
+    if resolved_path is None:
+        return default_rule_config()
+
+    try:
+        payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise RuntimeError(f"Unable to read rules config '{resolved_path}': {error}") from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Rules config '{resolved_path}' is not valid JSON: {error}") from error
+
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"Rules config '{resolved_path}' must contain a JSON object.")
+
+    config = RuleConfig(
+        identifier_hints=_load_hint_group(payload.get("field_hints"), "identifier", DEFAULT_ID_HINTS),
+        balance_hints=_load_hint_group(payload.get("field_hints"), "balance", DEFAULT_BALANCE_HINTS),
+        custom_rules=_load_custom_rules(payload.get("rules")),
+        source_path=resolved_path,
+    )
+    return config
+
+
+def _resolve_rule_config_path(repo_root: Path, config_path: Path | None) -> Path | None:
+    if config_path is not None:
+        candidate = config_path if config_path.is_absolute() else repo_root / config_path
+        resolved = candidate.resolve()
+        if not resolved.exists():
+            raise RuntimeError(f"Rules config '{resolved}' does not exist.")
+        return resolved
+
+    for filename in DEFAULT_RULE_FILENAMES:
+        candidate = (repo_root / filename).resolve()
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _load_hint_group(payload: object, group_name: str, defaults: tuple[str, ...]) -> tuple[str, ...]:
+    if payload is None:
+        return defaults
+    if not isinstance(payload, dict):
+        raise RuntimeError("'field_hints' must be a JSON object.")
+    group = payload.get(group_name)
+    if group is None:
+        return defaults
+    if isinstance(group, list):
+        return _normalize_string_list(group, f"field_hints.{group_name}")
+    if not isinstance(group, dict):
+        raise RuntimeError(f"'field_hints.{group_name}' must be an array or object.")
+
+    values = list(defaults)
+    replace_values = group.get("replace")
+    if replace_values is not None:
+        values = list(_normalize_string_list(replace_values, f"field_hints.{group_name}.replace"))
+    for value in _normalize_string_list(group.get("add", []), f"field_hints.{group_name}.add"):
+        if value not in values:
+            values.append(value)
+    remove_values = set(_normalize_string_list(group.get("remove", []), f"field_hints.{group_name}.remove"))
+    return tuple(value for value in values if value not in remove_values)
+
+
+def _load_custom_rules(payload: object) -> tuple[CustomRule, ...]:
+    if payload is None:
+        return ()
+    if not isinstance(payload, list):
+        raise RuntimeError("'rules' must be an array.")
+
+    rules: list[CustomRule] = []
+    for index, raw_rule in enumerate(payload):
+        if not isinstance(raw_rule, dict):
+            raise RuntimeError(f"rules[{index}] must be a JSON object.")
+        name = _require_string(raw_rule, "name", f"rules[{index}]")
+        matcher = _load_matcher(raw_rule.get("match"), f"rules[{index}].match")
+        key_change_template = _require_string(raw_rule, "key_change_template", f"rules[{index}]")
+        rules.append(
+            CustomRule(
+                name=name,
+                matcher=matcher,
+                key_change_template=key_change_template,
+            )
+        )
+    return tuple(rules)
+
+
+def _load_matcher(payload: object, path: str) -> RuleMatch:
+    if payload is None:
+        return RuleMatch()
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"'{path}' must be a JSON object.")
+    return RuleMatch(
+        change_types=_normalize_string_list(payload.get("change_types", []), f"{path}.change_types"),
+        column_hints=_normalize_string_list(payload.get("column_hints", []), f"{path}.column_hints"),
+        table_hints=_normalize_string_list(payload.get("table_hints", []), f"{path}.table_hints"),
+        row_key_hints=_normalize_string_list(payload.get("row_key_hints", []), f"{path}.row_key_hints"),
+        file_path_hints=_normalize_string_list(payload.get("file_path_hints", []), f"{path}.file_path_hints"),
+        numeric_only=_optional_bool(payload.get("numeric_only"), f"{path}.numeric_only") or False,
+        before_empty=_optional_bool(payload.get("before_empty"), f"{path}.before_empty"),
+        after_empty=_optional_bool(payload.get("after_empty"), f"{path}.after_empty"),
+    )
+
+def _normalize_string_list(values: object, path: str) -> tuple[str, ...]:
+    if not isinstance(values, list):
+        raise RuntimeError(f"'{path}' must be an array of strings.")
+    normalized: list[str] = []
+    for index, value in enumerate(values):
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(f"'{path}[{index}]' must be a non-empty string.")
+        lowered = value.strip().lower()
+        if lowered not in normalized:
+            normalized.append(lowered)
+    return tuple(normalized)
+
+
+def _require_string(payload: dict[str, Any], key: str, path: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"'{path}.{key}' must be a non-empty string.")
+    return value.strip()
+
+
+def _optional_bool(value: object, path: str) -> bool | None:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise RuntimeError(f"'{path}' must be a boolean.")
+    return value
 
 
 def _contains_hint(name: str, hints: tuple[str, ...]) -> bool:
@@ -982,148 +1118,109 @@ def _is_number(value: str) -> bool:
         return True
     except ValueError:
         return False
-
-
-def _priority_for_severity(severity: str) -> str:
-    return {
-        "critical": "P0",
-        "high": "P1",
-        "medium": "P1",
-        "low": "P2",
-    }[severity]
-
-
 def _transition(before_value: str, after_value: str) -> str:
     before_text = before_value or "空"
     after_text = after_value or "空"
     return f"从 {before_text} 变为 {after_text}"
 
 
-def analyze_diffs(file_path: str, diffs: list[StructuredDiff], warnings: list[str]) -> tuple[list[str], list[RiskItem], list[TodoItem]]:
+def analyze_diffs(
+    file_path: str,
+    diffs: list[StructuredDiff],
+    warnings: list[str],
+    rule_config: RuleConfig | None = None,
+) -> list[str]:
+    config = rule_config or default_rule_config()
     key_changes: list[str] = []
-    buckets: dict[str, dict[str, object]] = defaultdict(lambda: {"severity": "low", "count": 0, "evidence": []})
-
-    def add_bucket(bucket: str, severity: str, evidence: str) -> None:
-        current = buckets[bucket]
-        current["count"] = int(current["count"]) + 1
-        if severity_order(severity) > severity_order(str(current["severity"])):
-            current["severity"] = severity
-        evidence_list = current["evidence"]
-        if isinstance(evidence_list, list) and len(evidence_list) < 3:
-            evidence_list.append(evidence)
 
     for diff in diffs:
-        evidence = f"{file_path}::{diff.table} row={diff.row_key} column={diff.column} type={diff.change_type}"
+        custom_rule = _match_custom_rule(file_path, diff, config.custom_rules)
+        if custom_rule is not None:
+            key_changes.append(_render_change(custom_rule.key_change_template, file_path, diff))
+            continue
+
         if diff.change_type in {"table_added", "table_removed"}:
-            add_bucket("schema-change", "high", evidence)
             if diff.change_type == "table_added":
                 key_changes.append(f"{file_path} 的表 {diff.table} 从不存在变为存在。")
             else:
                 key_changes.append(f"{file_path} 的表 {diff.table} 从存在变为不存在。")
             continue
         if diff.change_type in {"column_added", "column_removed"}:
-            add_bucket("schema-change", "high", evidence)
             if diff.change_type == "column_added":
                 key_changes.append(f"{file_path} 的表 {diff.table} 字段 {diff.column} 从不存在变为存在。")
             else:
                 key_changes.append(f"{file_path} 的表 {diff.table} 字段 {diff.column} 从存在变为不存在。")
             continue
         if diff.change_type == "row_deleted":
-            add_bucket("row-deletion", "high", evidence)
             key_changes.append(f"{file_path} 的表 {diff.table} 中的行 {diff.row_key} 从存在变为不存在。")
             continue
         if diff.change_type == "row_added":
-            add_bucket("row-addition", "low", evidence)
             key_changes.append(f"{file_path} 的表 {diff.table} 中新增了行 {diff.row_key}。")
             continue
-        if _contains_hint(diff.column, ID_HINTS):
-            add_bucket("identifier-change", "critical", evidence)
+        if _contains_hint(diff.column, config.identifier_hints):
             key_changes.append(
                 f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的标识字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
             )
             continue
         if diff.before_value and not diff.after_value:
-            add_bucket("value-cleared", "medium", evidence)
             key_changes.append(
                 f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的字段 {diff.column} 从 {diff.before_value} 变为空。"
             )
             continue
-        if _contains_hint(diff.column, BALANCE_HINTS) and _is_number(diff.before_value) and _is_number(diff.after_value):
-            add_bucket("balance-change", "high", evidence)
+        if _contains_hint(diff.column, config.balance_hints) and _is_number(diff.before_value) and _is_number(diff.after_value):
             key_changes.append(
                 f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的数值字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
             )
             continue
         if _is_number(diff.before_value) and _is_number(diff.after_value):
-            add_bucket("numeric-change", "medium", evidence)
             key_changes.append(
                 f"{file_path} 的表 {diff.table} 行 {diff.row_key} 的字段 {diff.column} {_transition(diff.before_value, diff.after_value)}。"
             )
 
     for warning in warnings:
-        add_bucket("unsupported-file", "medium", warning)
         key_changes.append(warning)
-
-    risk_templates = {
-        "schema-change": ("结构变更", "可能影响字段兼容性、下游读取逻辑或跨表引用关系。"),
-        "row-deletion": ("数据删除", "可能导致引用失效、配置缺失或线上行为变化。"),
-        "row-addition": ("新增数据", "需要确认新增配置是否已完成联调和验证。"),
-        "identifier-change": ("标识字段变更", "主键或唯一标识变化可能导致引用链断裂。"),
-        "value-cleared": ("关键值被清空", "清空字段可能触发默认值、空引用或配置异常。"),
-        "balance-change": ("数值平衡变更", "数值调整可能影响战斗、掉落或奖励平衡。"),
-        "numeric-change": ("数值字段变化", "数值变动需要业务确认是否符合预期。"),
-        "unsupported-file": ("文件暂不可结构化分析", "该文件需要人工转换后再进行精确 diff。"),
-    }
-
-    todo_templates = {
-        "schema-change": ("确认字段与下游兼容性", "数据负责人", "本次迭代内", "检查所有依赖该表的读取逻辑和脚本，确认字段新增/删除是否需要同步更新。", "在相关系统完成回归并确认读取成功。"),
-        "row-deletion": ("核对删除数据的引用影响", "模块负责人", "提交前", "确认被删除数据是否仍被脚本、关卡或配置引用，必要时补迁移说明。", "搜索引用点并完成一次相关场景验证。"),
-        "row-addition": ("确认新增数据接入链路", "策划/程序协作", "提测前", "检查新增配置是否已被代码、脚本或资源正确消费。", "验证新增配置在目标场景中生效。"),
-        "identifier-change": ("核对主键或标识字段修改", "模块负责人", "立即", "确认所有引用该标识的表、脚本和逻辑是否同步更新。", "完成引用搜索并通过一次关键路径回归。"),
-        "value-cleared": ("确认被清空字段是否允许为空", "数据负责人", "提测前", "核实清空字段是否有默认值保护，必要时补配置说明。", "确认运行时不会因空值报错或走错逻辑。"),
-        "balance-change": ("复核关键数值调整", "策划负责人", "提测前", "复核数值改动意图，并安排相关玩法/掉落回归。", "通过目标场景的数值回归验证。"),
-        "numeric-change": ("确认一般数值变更", "数据负责人", "提测前", "确认数值变更来源和预期影响，必要时补充说明。", "抽样核对变更后的行为与预期一致。"),
-        "unsupported-file": ("转换不支持的 Excel 文件", "工具维护人", "下次分析前", "将不支持的文件格式转换为 .xlsx 并重新执行分析。", "重新生成结构化 diff 并确认无遗漏。"),
-    }
-
-    risks: list[RiskItem] = []
-    todos: list[TodoItem] = []
-    for bucket_name, bucket in sorted(buckets.items()):
-        title, impact = risk_templates[bucket_name]
-        evidence_lines = bucket["evidence"]
-        evidence_text = "\n".join(f"- {line}" for line in evidence_lines) if isinstance(evidence_lines, list) else str(evidence_lines)
-        severity = str(bucket["severity"])
-        risks.append(
-            RiskItem(
-                risk_type=title,
-                severity=severity,
-                confidence=min(0.99, 0.55 + int(bucket["count"]) * 0.1),
-                evidence=evidence_text,
-                impact=impact,
-            )
-        )
-        todo_title, owner_hint, due_hint, action, verify_steps = todo_templates[bucket_name]
-        todos.append(
-            TodoItem(
-                title=todo_title,
-                priority=_priority_for_severity(severity),
-                owner_hint=owner_hint,
-                due_hint=due_hint,
-                action=action,
-                verify_steps=verify_steps,
-                evidence=evidence_text,
-            )
-        )
-    return key_changes, risks, todos
+    return key_changes
 
 
-def severity_order(severity: str) -> int:
-    return {
-        "low": 1,
-        "medium": 2,
-        "high": 3,
-        "critical": 4,
-    }[severity]
+def _match_custom_rule(file_path: str, diff: StructuredDiff, rules: tuple[CustomRule, ...]) -> CustomRule | None:
+    for rule in rules:
+        if _rule_matches(file_path, diff, rule.matcher):
+            return rule
+    return None
+
+
+def _rule_matches(file_path: str, diff: StructuredDiff, matcher: RuleMatch) -> bool:
+    if matcher.change_types and diff.change_type not in matcher.change_types:
+        return False
+    if matcher.column_hints and not _contains_hint(diff.column, matcher.column_hints):
+        return False
+    if matcher.table_hints and not _contains_hint(diff.table, matcher.table_hints):
+        return False
+    if matcher.row_key_hints and not _contains_hint(diff.row_key, matcher.row_key_hints):
+        return False
+    if matcher.file_path_hints and not _contains_hint(file_path, matcher.file_path_hints):
+        return False
+    if matcher.numeric_only and not (_is_number(diff.before_value) and _is_number(diff.after_value)):
+        return False
+    if matcher.before_empty is not None and matcher.before_empty != (not bool(diff.before_value)):
+        return False
+    if matcher.after_empty is not None and matcher.after_empty != (not bool(diff.after_value)):
+        return False
+    return True
+
+
+def _render_change(template: str, file_path: str, diff: StructuredDiff) -> str:
+    return template.format_map(
+        {
+            "file_path": file_path,
+            "table": diff.table,
+            "row_key": diff.row_key,
+            "column": diff.column,
+            "before_value": diff.before_value or "空",
+            "after_value": diff.after_value or "空",
+            "change_type": diff.change_type,
+        }
+    )
 
 # --- module: orchestrator ---
 
@@ -1143,9 +1240,11 @@ class AnalyzerConfig:
     head: str
     target_path: Path | None
     mode: str
+    rules_config: Path | None
 
 
 def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
+    rule_config = load_rule_config(config.repo, config.rules_config)
     comparison = collect_commit_comparison(
         config.repo,
         since=config.since,
@@ -1158,8 +1257,6 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
     file_reports: list[FileAnalysis] = []
     warnings: list[str] = []
     key_changes: list[str] = []
-    risks = []
-    todos = []
     changed_file_count = len(comparison.changed_files)
 
     if config.mode not in {"rule", "api"}:
@@ -1187,31 +1284,26 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
             write_normalized_tables(after_tables, artifact_dir, "after")
 
         analysis.diffs = diff_tables(before_tables, after_tables)
-        analysis.key_changes, analysis.risks, analysis.todos = analyze_diffs(
+        analysis.key_changes = analyze_diffs(
             file_change.file_path,
             analysis.diffs,
             analysis.warnings,
+            rule_config,
         )
         file_reports.append(analysis)
         warnings.extend(analysis.warnings)
         key_changes.extend(analysis.key_changes)
-        risks.extend(analysis.risks)
-        todos.extend(analysis.todos)
 
     analyzed_files = [item for item in file_reports if item.file_change.file_type != "other"]
     summary = f"Compared {comparison.description} across {len(analyzed_files)} supported file change(s)."
     report = AnalysisReport(
         summary=summary,
         key_changes=dedupe(key_changes),
-        risks=risks,
-        todos=todos,
         metrics={
             "commit_count": 2,
             "changed_file_count": changed_file_count,
             "analyzed_file_count": len(analyzed_files),
             "diff_count": sum(len(item.diffs) for item in file_reports),
-            "risk_count": len(risks),
-            "todo_count": len(todos),
         },
         commits=[comparison.before, comparison.after],
         files=file_reports,
@@ -1290,6 +1382,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="rule",
         help="Analysis mode: rule for local-only output, api for remote AI analysis after local diff generation.",
     )
+    parser.add_argument(
+        "--rules-config",
+        help="Path to a JSON rules config file. Defaults to commit-change-rules.json in the repo root when present.",
+    )
     return parser
 
 
@@ -1305,6 +1401,7 @@ def main(argv: list[str] | None = None) -> int:
         head=args.head,
         target_path=Path(args.target_path) if args.target_path else None,
         mode=args.mode,
+        rules_config=Path(args.rules_config) if args.rules_config else None,
     )
     outputs = run_analysis(config)
     print("Analysis completed.")

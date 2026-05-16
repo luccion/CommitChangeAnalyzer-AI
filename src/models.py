@@ -59,33 +59,11 @@ class StructuredDiff:
 
 
 @dataclass(slots=True)
-class RiskItem:
-    risk_type: str
-    severity: str
-    confidence: float
-    evidence: str
-    impact: str
-
-
-@dataclass(slots=True)
-class TodoItem:
-    title: str
-    priority: str
-    owner_hint: str
-    due_hint: str
-    action: str
-    verify_steps: str
-    evidence: str
-
-
-@dataclass(slots=True)
 class FileAnalysis:
     commit_id: str
     file_change: FileChange
     diffs: list[StructuredDiff] = field(default_factory=list)
     key_changes: list[str] = field(default_factory=list)
-    risks: list[RiskItem] = field(default_factory=list)
-    todos: list[TodoItem] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -93,8 +71,6 @@ class FileAnalysis:
 class AnalysisReport:
     summary: str
     key_changes: list[str]
-    risks: list[RiskItem]
-    todos: list[TodoItem]
     metrics: dict[str, Any]
     commits: list[CommitEvent]
     files: list[FileAnalysis]

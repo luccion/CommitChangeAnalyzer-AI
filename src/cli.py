@@ -28,6 +28,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="rule",
         help="Analysis mode: rule for local-only output, api for remote AI analysis after local diff generation.",
     )
+    parser.add_argument(
+        "--rules-config",
+        help="Path to a JSON rules config file. Defaults to commit-change-rules.json in the repo root when present.",
+    )
     return parser
 
 
@@ -43,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
         head=args.head,
         target_path=Path(args.target_path) if args.target_path else None,
         mode=args.mode,
+        rules_config=Path(args.rules_config) if args.rules_config else None,
     )
     outputs = run_analysis(config)
     print("Analysis completed.")

@@ -80,8 +80,6 @@ def build_diff_markdown(report: AnalysisReport, range_description: str) -> str:
         f"- changed_file_count: {report.metrics.get('changed_file_count', 0)}",
         f"- analyzed_file_count: {report.metrics.get('analyzed_file_count', 0)}",
         f"- diff_count: {report.metrics.get('diff_count', 0)}",
-        f"- risk_count: {report.metrics.get('risk_count', 0)}",
-        f"- todo_count: {report.metrics.get('todo_count', 0)}",
         "",
         "## 文件级差异",
         "",
@@ -154,7 +152,6 @@ def write_report(
     output_dir.mkdir(parents=True, exist_ok=True)
     markdown_path = output_dir / "analysis-report.md"
     json_path = output_dir / "analysis-report.json"
-    todo_path = output_dir / "todo-list.json"
     diff_markdown_path = output_dir / "diff-context.md"
     diff_json_path = output_dir / "diff-context.json"
     prompt_path = output_dir / "ai-prompt.md"
@@ -189,17 +186,12 @@ AI 中间产物：{diff_markdown_path.name}、{diff_json_path.name}、{prompt_pa
     if ai_result is not None:
         json_payload["ai_analysis"] = ai_result
     json_path.write_text(json.dumps(json_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    todo_path.write_text(
-        json.dumps([asdict(todo) for todo in report.todos], ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
     diff_markdown_path.write_text(build_diff_markdown(report, range_description), encoding="utf-8")
     diff_json_path.write_text(json.dumps(build_diff_context(report, range_description), ensure_ascii=False, indent=2), encoding="utf-8")
     prompt_path.write_text(build_prompt_text(range_description), encoding="utf-8")
     return {
         "markdown": str(markdown_path),
         "json": str(json_path),
-        "todo_json": str(todo_path),
         "diff_markdown": str(diff_markdown_path),
         "diff_json": str(diff_json_path),
         "prompt": str(prompt_path),

@@ -10,7 +10,7 @@ from git_ops import collect_commit_comparison, read_blob
 from models import AnalysisReport, FileAnalysis
 from normalize import load_tables, write_normalized_tables
 from reporting import build_diff_context, build_diff_markdown, build_prompt_text, write_report
-from rules import analyze_diffs
+from rules import analyze_diffs, load_rule_config
 
 
 @dataclass(slots=True)
@@ -23,9 +23,11 @@ class AnalyzerConfig:
     head: str
     target_path: Path | None
     mode: str
+    rules_config: Path | None
 
 
 def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
+    rule_config = load_rule_config(config.repo, config.rules_config)
     comparison = collect_commit_comparison(
         config.repo,
         since=config.since,
@@ -38,8 +40,6 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
     file_reports: list[FileAnalysis] = []
     warnings: list[str] = []
     key_changes: list[str] = []
-    risks = []
-    todos = []
     changed_file_count = len(comparison.changed_files)
 
     if config.mode not in {"rule", "api"}:
@@ -67,31 +67,26 @@ def run_analysis(config: AnalyzerConfig) -> dict[str, str]:
             write_normalized_tables(after_tables, artifact_dir, "after")
 
         analysis.diffs = diff_tables(before_tables, after_tables)
-        analysis.key_changes, analysis.risks, analysis.todos = analyze_diffs(
+        analysis.key_changes = analyze_diffs(
             file_change.file_path,
             analysis.diffs,
             analysis.warnings,
+            rule_config,
         )
         file_reports.append(analysis)
         warnings.extend(analysis.warnings)
         key_changes.extend(analysis.key_changes)
-        risks.extend(analysis.risks)
-        todos.extend(analysis.todos)
 
     analyzed_files = [item for item in file_reports if item.file_change.file_type != "other"]
     summary = f"Compared {comparison.description} across {len(analyzed_files)} supported file change(s)."
     report = AnalysisReport(
         summary=summary,
         key_changes=dedupe(key_changes),
-        risks=risks,
-        todos=todos,
         metrics={
             "commit_count": 2,
             "changed_file_count": changed_file_count,
             "analyzed_file_count": len(analyzed_files),
             "diff_count": sum(len(item.diffs) for item in file_reports),
-            "risk_count": len(risks),
-            "todo_count": len(todos),
         },
         commits=[comparison.before, comparison.after],
         files=file_reports,

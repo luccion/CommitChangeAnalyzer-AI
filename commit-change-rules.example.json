@@ -1,0 +1,77 @@
+{
+    "field_hints": {
+        "identifier": {
+            "add": [
+                "quest_id",
+                "stage_id",
+                "item_id",
+                "monster_id"
+            ]
+        },
+        "balance": {
+            "add": [
+                "stamina",
+                "crit",
+                "cooldown",
+                "drop_rate",
+                "reward_count",
+                "spawn_weight"
+            ],
+            "remove": [
+                "score"
+            ]
+        }
+    },
+    "rules": [
+        {
+            "name": "Quest reward change",
+            "match": {
+                "file_path_hints": [
+                    "quest"
+                ],
+                "column_hints": [
+                    "reward",
+                    "drop"
+                ],
+                "change_types": [
+                    "cell_changed"
+                ],
+                "numeric_only": true
+            },
+            "key_change_template": "{file_path} 的表 {table} 行 {row_key} 的任务奖励字段 {column} 从 {before_value} 变为 {after_value}。"
+        },
+        {
+            "name": "Shop price change",
+            "match": {
+                "file_path_hints": [
+                    "shop",
+                    "store"
+                ],
+                "column_hints": [
+                    "price",
+                    "cost"
+                ],
+                "change_types": [
+                    "cell_changed"
+                ],
+                "numeric_only": true
+            },
+            "key_change_template": "{file_path} 的表 {table} 行 {row_key} 的商店价格字段 {column} 从 {before_value} 变为 {after_value}。"
+        },
+        {
+            "name": "Drop rate cleared",
+            "match": {
+                "column_hints": [
+                    "drop_rate",
+                    "rate"
+                ],
+                "change_types": [
+                    "cell_changed"
+                ],
+                "before_empty": false,
+                "after_empty": true
+            },
+            "key_change_template": "{file_path} 的表 {table} 行 {row_key} 的掉率字段 {column} 从 {before_value} 被清空。"
+        }
+    ]
+}
